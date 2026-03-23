@@ -1,5 +1,5 @@
 /* kernel/kernel.c
- * KernelOS - Linux-style Kernel with GUI
+ * KernelOS - Simple Mode 13h GUI
  */
 
 #include <stdint.h>
@@ -14,51 +14,28 @@ extern void gdt_init(void);
 extern void idt_init(void);
 extern void pic_init(void);
 extern void paging_init(void);
-extern int vesa_init(void);
-extern void gui_run(void);
+extern void simple_gui_run(void);
 
 void kernel_main(uint32_t magic, void* mbi) {
     __asm__ volatile ("mov %0, %%esp" : : "r"(kstack + sizeof(kstack)));
     
     vga_clear();
-    vga_puts("KernelOS Boot\n");
+    vga_puts("KernelOS Boot\n\n");
     
-    vga_puts("Magic: ");
-    vga_puthex(magic);
-    vga_puts("\n");
-    
-    if (magic != 0x2BADB002) {
-        vga_puts("BAD MAGIC!\n");
-        while (1) __asm__ volatile ("cli; hlt");
-    }
-    
-    vga_puts("GDT...");
+    vga_puts("Init GDT...\n");
     gdt_init();
-    vga_puts("OK\n");
     
-    vga_puts("IDT...");
+    vga_puts("Init IDT...\n");
     idt_init();
-    vga_puts("OK\n");
     
-    vga_puts("PIC...");
+    vga_puts("Init PIC...\n");
     pic_init();
-    vga_puts("OK\n");
     
-    vga_puts("Paging...");
+    vga_puts("Init Paging...\n");
     paging_init();
-    vga_puts("OK\n");
     
-    vga_puts("VESA...");
-    int vesa = vesa_init();
-    if (vesa == 0) {
-        vga_puts("OK\n");
-    } else {
-        vga_puts("FAIL\n");
-    }
+    vga_puts("\nStarting GUI...\n");
+    simple_gui_run();
     
-    vga_puts("Starting GUI...\n");
-    gui_run();
-    
-    vga_puts("GUI exited\n");
     while (1) __asm__ volatile ("cli; hlt");
 }

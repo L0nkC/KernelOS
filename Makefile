@@ -11,8 +11,8 @@ LDFLAGS = -m elf_i386 -T boot/linker.ld
 OBJS = boot/boot.o kernel/kernel.o kernel/gdt.o kernel/gdt_flush.o \
        kernel/idt.o kernel/idt_flush.o kernel/isr.o kernel/isr_asm.o \
        kernel/paging.o kernel/paging_asm.o \
-       drivers/vga_text.o drivers/vesa.o drivers/font.o \
-       drivers/keyboard.o drivers/mouse.o gui/gui.o
+       drivers/vga_text.o drivers/vga13h.o \
+       gui/simple_gui.o
 
 TARGET = kernelos.bin
 ISO = kernelos.iso
