@@ -1,29 +1,13 @@
-; kernel/isr.asm
-; ISR and IRQ handlers
+; kernel/isr_asm.asm
+; ISR handlers
 
 section .text
+global isr0
+extern isr_handler
 
-global isr0, isr13, isr14
-global irq0, irq1, irq12
-
-extern isr_handler, irq_handler
-
-; Exceptions
 isr0:
     push 0
     push 0
-    jmp isr_common
-
-isr13:
-    push 0
-    push 13
-    jmp isr_common
-
-isr14:
-    push 14
-    jmp isr_common
-
-isr_common:
     pusha
     push ds
     push es
@@ -43,29 +27,4 @@ isr_common:
     pop ds
     popa
     add esp, 8
-    iret
-
-; IRQs
-irq0:
-    pusha
-    push 0
-    call irq_handler
-    add esp, 4
-    popa
-    iret
-
-irq1:
-    pusha
-    push 1
-    call irq_handler
-    add esp, 4
-    popa
-    iret
-
-irq12:
-    pusha
-    push 12
-    call irq_handler
-    add esp, 4
-    popa
     iret

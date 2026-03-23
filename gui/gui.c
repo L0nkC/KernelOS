@@ -1,195 +1,108 @@
-/* gui/gui.c
- * Window Manager - Full GUI
- */
-
+/* gui/gui.c */
 #include <stdint.h>
-#include "../drivers/vesa.h"
-#include "../drivers/font.h"
-#include "../drivers/keyboard.h"
-#include "../drivers/mouse.h"
-#include "gui.h"
+#include "../kernel/io.h"
 
-#define MAX_WIN 6
-#define TITLE_H 24
+#define FB 0xA0000
+#define W 320
+#define H 200
 
-typedef struct {
-    char title[32];
-    int x, y, w, h;
-    int visible;
-    int active;
-} window_t;
+static uint8_t* fb = (uint8_t*)FB;
 
-static window_t wins[MAX_WIN];
-static int win_cnt = 0;
-static int active = -1;
-static int running = 1;
-static int drag = -1;
-static int drag_x, drag_y;
-
-static void draw_win(window_t* w) {
-    if (!w->visible) return;
-    
-    int x = w->x, y = w->y;
-    int wt = w->w, h = w->h;
-    uint32_t tc = w->active ? UI_ACCENT : CLR_GRAY;
-    
-    /* Shadow */
-    vesa_fill_rect(x + 6, y + 6, wt, h, 0x60000000);
-    
-    /* Body */
-    vesa_fill_rect(x, y, wt, h, UI_WINDOW_BG);
-    
-    /* Title */
-    vesa_fill_rect(x, y, wt, TITLE_H, tc);
-    font_draw_string(x + 10, y + 5, w->title, CLR_WHITE);
-    
-    /* Close button */
-    vesa_fill_rect(x + wt - 24, y + 6, 16, 12, CLR_RED);
-    
-    /* Border */
-    vesa_rect(x, y, wt, h, tc);
+static void set_vga_mode13h(void) {
+    /* Set VGA Mode 13h (320x200x256) via BIOS would be ideal,
+     * but we can also program the VGA registers directly.
+     * For now, let's just clear the text screen and use it. */
 }
 
-static void draw_cursor(int x, int y) {
-    uint32_t c = CLR_WHITE;
-    vesa_pixel(x, y, c);
-    vesa_pixel(x + 1, y, c);
-    vesa_pixel(x, y + 1, c);
-    vesa_pixel(x + 1, y + 1, c);
-}
-
-static void draw_desktop(void) {
-    vesa_clear(UI_BG);
-    
-    /* Panel */
-    vesa_fill_rect(0, 0, 800, 28, UI_PANEL);
-    font_draw_string(10, 6, "KernelOS | 800x600 | Mouse + Keyboard", CLR_WHITE);
-    
-    for (int i = 0; i < win_cnt; i++) {
-        draw_win(&wins[i]);
-    }
-}
-
-static void create_win(const char* t, int x, int y, int w, int h) {
-    if (win_cnt >= MAX_WIN) return;
-    window_t* win = &wins[win_cnt];
-    
-    int i = 0;
-    while (t[i] && i < 31) { win->title[i] = t[i]; i++; }
-    win->title[i] = 0;
-    
-    win->x = x; win->y = y;
-    win->w = w; win->h = h;
-    win->visible = 1;
-    win->active = (win_cnt == 0);
-    
-    if (win_cnt == 0) active = 0;
-    win_cnt++;
-}
-
-static void close_win(int id) {
-    if (id >= 0 && id < win_cnt) wins[id].visible = 0;
-}
-
-static int in_title(window_t* w, int x, int y) {
-    return w->visible &&
-           x >= w->x && x < w->x + w->w &&
-           y >= w->y && y < w->y + TITLE_H;
-}
-
-static int in_close(window_t* w, int x, int y) {
-    return x >= w->x + w->w - 24 && x < w->x + w->w - 8 &&
-           y >= w->y + 6 && y < w->y + 18;
-}
-
-static void handle_mouse(void) {
-    if (!mouse_moved()) return;
-    
-    mouse_t m = mouse_get();
-    
-    if (m.buttons & 1) {
-        /* Check close buttons */
-        for (int i = 0; i < win_cnt; i++) {
-            if (wins[i].visible && in_close(&wins[i], m.x, m.y)) {
-                close_win(i);
-                return;
-            }
-        }
-        
-        /* Check title bars */
-        for (int i = win_cnt - 1; i >= 0; i--) {
-            if (wins[i].visible && in_title(&wins[i], m.x, m.y)) {
-                for (int j = 0; j < win_cnt; j++) wins[j].active = 0;
-                wins[i].active = 1;
-                active = i;
-                
-                drag = i;
-                drag_x = m.x - wins[i].x;
-                drag_y = m.y - wins[i].y;
-                return;
+static void rect(int x, int y, int w, int h, uint8_t c) {
+    for (int row = y; row < y + h; row++) {
+        for (int col = x; col < x + w; col++) {
+            if (row >= 0 && row < H && col >= 0 && col < W) {
+                fb[row * W + col] = c;
             }
         }
     }
-    
-    if (drag >= 0) {
-        if (m.buttons & 1) {
-            wins[drag].x = m.x - drag_x;
-            wins[drag].y = m.y - drag_y;
-            
-            if (wins[drag].x < 0) wins[drag].x = 0;
-            if (wins[drag].y < 0) wins[drag].y = 0;
-            if (wins[drag].x + wins[drag].w > 800) wins[drag].x = 800 - wins[drag].w;
-            if (wins[drag].y + wins[drag].h > 600) wins[drag].y = 600 - wins[drag].h;
-        } else {
-            drag = -1;
+}
+
+static void border(int x, int y, int w, int h, uint8_t c) {
+    for (int i = 0; i < w; i++) {
+        if (x + i >= 0 && x + i < W) {
+            if (y >= 0 && y < H) fb[y * W + x + i] = c;
+            if (y + h - 1 >= 0 && y + h - 1 < H) fb[(y + h - 1) * W + x + i] = c;
+        }
+    }
+    for (int i = 0; i < h; i++) {
+        if (y + i >= 0 && y + i < H) {
+            if (x >= 0 && x < W) fb[(y + i) * W + x] = c;
+            if (x + w - 1 >= 0 && x + w - 1 < W) fb[(y + i) * W + x + w - 1] = c;
         }
     }
 }
 
-static void handle_kb(void) {
-    char c;
-    if (kb_getchar(&c)) {
-        switch (c) {
-            case 27: if (active >= 0) close_win(active); break;
-            case '1': case '2': case '3': case '4': case '5': case '6':
-                {
-                    int id = c - '1';
-                    if (id < win_cnt && wins[id].visible) {
-                        for (int j = 0; j < win_cnt; j++) wins[j].active = 0;
-                        wins[id].active = 1;
-                        active = id;
-                    }
-                }
-                break;
-            case 'q': case 'Q': running = 0; break;
-        }
-    }
-}
-
-void gui_init(void) {
-    create_win("Terminal", 50, 50, 320, 200);
-    create_win("Files", 400, 50, 280, 220);
-    create_win("Editor", 50, 300, 300, 200);
-    create_win("Settings", 380, 300, 280, 200);
-    
-    kb_init();
-    mouse_init();
+static void win(int x, int y, int w, int h, uint8_t t, uint8_t bg) {
+    rect(x + 2, y + 2, w, h, 0);
+    rect(x, y, w, h, bg);
+    rect(x, y, w, 10, t);
+    border(x, y, w, h, 15);
 }
 
 void gui_run(void) {
-    mouse_t m;
+    /* Switch to Mode 13h by writing to VGA registers */
+    /* Attribute Controller - disable video first */
+    inb(0x3DA);  /* Reset attribute flip-flop */
+    outb(0x3C0, 0x00);  /* Disable video */
     
-    while (running) {
-        draw_desktop();
-        m = mouse_get();
-        draw_cursor(m.x, m.y);
-        vesa_flip();
-        
-        handle_mouse();
-        handle_kb();
-        
-        for (volatile int i = 0; i < 5000; i++);
-    }
+    /* Sequencer registers */
+    outb(0x3C4, 0x01); outb(0x3C5, 0x01);  /* Clock mode */
+    outb(0x3C4, 0x04); outb(0x3C5, 0x0E);  /* Memory mode - chain 4 */
     
-    vesa_exit();
+    /* Graphics Controller */
+    outb(0x3CE, 0x05); outb(0x3CF, 0x40);  /* Mode register */
+    outb(0x3CE, 0x06); outb(0x3CF, 0x05);  /* Misc register - A0000, 64KB, graphics */
+    
+    /* CRTC registers */
+    outb(0x3D4, 0x11); uint8_t v = inb(0x3D5) & 0x7F; outb(0x3D4, 0x11); outb(0x3D5, v);
+    outb(0x3D4, 0x00); outb(0x3D5, 0x5F);
+    outb(0x3D4, 0x01); outb(0x3D5, 0x4F);
+    outb(0x3D4, 0x02); outb(0x3D5, 0x50);
+    outb(0x3D4, 0x03); outb(0x3D5, 0x82);
+    outb(0x3D4, 0x04); outb(0x3D5, 0x54);
+    outb(0x3D4, 0x05); outb(0x3D5, 0x80);
+    outb(0x3D4, 0x06); outb(0x3D5, 0xBF);
+    outb(0x3D4, 0x07); outb(0x3D5, 0x1F);
+    outb(0x3D4, 0x08); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x09); outb(0x3D5, 0x41);
+    outb(0x3D4, 0x0A); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x0B); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x0C); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x0D); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x0E); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x0F); outb(0x3D5, 0x00);
+    outb(0x3D4, 0x10); outb(0x3D5, 0x9C);
+    outb(0x3D4, 0x11); outb(0x3D5, 0x8E);
+    outb(0x3D4, 0x12); outb(0x3D5, 0x8F);
+    outb(0x3D4, 0x13); outb(0x3D5, 0x28);  /* Offset - 40 bytes per row (320 pixels / 8) */
+    outb(0x3D4, 0x14); outb(0x3D5, 0x40);
+    outb(0x3D4, 0x15); outb(0x3D5, 0x96);
+    outb(0x3D4, 0x16); outb(0x3D5, 0xB9);
+    outb(0x3D4, 0x17); outb(0x3D5, 0xA3);
+    outb(0x3D4, 0x18); outb(0x3D5, 0xFF);
+    
+    /* Re-enable video */
+    inb(0x3DA);
+    outb(0x3C0, 0x20);  /* Enable video */
+    
+    /* Clear to dark gray */
+    for (int i = 0; i < W * H; i++) fb[i] = 8;
+    
+    /* Top bar */
+    rect(0, 0, W, 12, 1);
+    
+    /* Windows */
+    win(20, 20, 80, 50, 9, 7);
+    win(120, 30, 80, 50, 2, 7);
+    win(50, 100, 80, 50, 4, 7);
+    win(180, 90, 80, 50, 5, 7);
+    
+    while (1) __asm__ volatile ("hlt");
 }
