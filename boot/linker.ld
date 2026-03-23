@@ -1,13 +1,14 @@
-/* Linker script */
+/* Linker script for KernelOS */
 ENTRY(_start)
 
 SECTIONS
 {
     . = 1M;
     
+    /* Multiboot header must be in first 8KB */
     .text BLOCK(4K) : ALIGN(4K)
     {
-        *(.multiboot)
+        *(.multiboot_header)
         *(.text)
     }
     

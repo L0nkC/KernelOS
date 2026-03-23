@@ -6,12 +6,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/* Multiboot header */
-__attribute__((section(".multiboot")))
-const uint32_t mb_header[3] = {
-    0x1BADB002, 0x00000003, -(0x1BADB002 + 0x00000003)
-};
-
 /* Stack */
 __attribute__((section(".bss"), aligned(16)))
 static uint8_t kstack[16384];

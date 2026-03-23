@@ -31,28 +31,28 @@ $(TARGET): $(OBJS)
 	$(AS) $(ASFLAGS) $< -o $@
 
 iso: $(TARGET)
+	@rm -rf iso
 	@mkdir -p iso/boot/grub
 	@cp $(TARGET) iso/boot/kernelos.bin
-	@echo 'set timeout=0' > iso/boot/grub/grub.cfg
+	@echo 'set timeout=3' > iso/boot/grub/grub.cfg
 	@echo 'set default=0' >> iso/boot/grub/grub.cfg
+	@echo '' >> iso/boot/grub/grub.cfg
 	@echo 'menuentry "KernelOS" {' >> iso/boot/grub/grub.cfg
 	@echo '    multiboot /boot/kernelos.bin' >> iso/boot/grub/grub.cfg
 	@echo '    boot' >> iso/boot/grub/grub.cfg
 	@echo '}' >> iso/boot/grub/grub.cfg
 	@grub-mkrescue -o $(ISO) iso 2>&1 | grep -v "^xorriso" || true
+	@echo "ISO created: $(ISO)"
 
 run: iso
-	qemu-system-i386 -cdrom $(ISO) -m 64M -vga std
+	qemu-system-i386 -cdrom $(ISO) -m 64M -vga std -boot d
 
 debug: iso
-	qemu-system-i386 -cdrom $(ISO) -m 64M -vga std -serial stdio
+	qemu-system-i386 -cdrom $(ISO) -m 64M -vga std -boot d -serial stdio -no-reboot -no-shutdown
 
 clean:
 	@rm -f $(OBJS) $(TARGET) $(ISO)
 	@rm -rf iso
 
-boot/boot.o: boot/boot.asm
-kernel/gdt_flush.o: kernel/gdt_flush.asm
-kernel/idt_flush.o: kernel/idt_flush.asm
-kernel/isr_asm.o: kernel/isr_asm.asm
+boot/boot.o: boot/boot.asm boot/linker.ld
 kernel/paging_asm.o: kernel/paging.asm
