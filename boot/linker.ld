@@ -1,30 +1,17 @@
-/* Linker script for KernelOS */
+/* Linker script */
 ENTRY(_start)
 
 SECTIONS
 {
     . = 1M;
     
-    /* Multiboot header must be in first 8KB */
-    .text BLOCK(4K) : ALIGN(4K)
+    .text : ALIGN(4)
     {
-        *(.multiboot_header)
         *(.text)
     }
     
-    .rodata BLOCK(4K) : ALIGN(4K)
+    .bss : ALIGN(4)
     {
-        *(.rodata)
-    }
-    
-    .data BLOCK(4K) : ALIGN(4K)
-    {
-        *(.data)
-    }
-    
-    .bss BLOCK(4K) : ALIGN(4K)
-    {
-        *(COMMON)
         *(.bss)
     }
 }
