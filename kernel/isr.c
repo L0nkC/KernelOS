@@ -4,14 +4,13 @@
 
 #include <stdint.h>
 #include "io.h"
+#include "../drivers/vga_text.h"
 
 typedef struct {
     uint32_t ds, edi, esi, ebp, esp, ebx, edx, ecx, eax;
     uint32_t int_no, err_code;
     uint32_t eip, cs, eflags;
 } registers_t;
-
-extern void serial_puts(const char*);
 
 static void itoa(int n, char* buf) {
     if (n == 0) {
@@ -27,7 +26,6 @@ static void itoa(int n, char* buf) {
     }
     if (neg) buf[i++] = '-';
     buf[i] = 0;
-    /* Reverse */
     for (int j = 0; j < i/2; j++) {
         char t = buf[j];
         buf[j] = buf[i-1-j];
@@ -36,11 +34,11 @@ static void itoa(int n, char* buf) {
 }
 
 void isr_handler(registers_t* regs) {
-    serial_puts("\n*** EXCEPTION: ");
+    vga_puts("\n*** EXCEPTION: ");
     char buf[16];
     itoa(regs->int_no, buf);
-    serial_puts(buf);
-    serial_puts(" ***\n");
+    vga_puts(buf);
+    vga_puts(" ***\n");
     while (1) __asm__ volatile ("cli; hlt");
 }
 
