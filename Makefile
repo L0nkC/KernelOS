@@ -1,12 +1,15 @@
-# KernelOS Makefile
+# KernelOS Makefile - macOS compatible with i686-elf cross-compiler
 
-CC = gcc
+CC = i686-elf-gcc
 CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -nostdlib -nostartfiles \
          -fno-exceptions -fno-stack-protector -fno-pic -Ikernel -std=c99
 AS = nasm
 ASFLAGS = -f elf32
-LD = ld
+LD = i686-elf-ld
 LDFLAGS = -m elf_i386 -T boot/linker.ld
+
+# Use cross-compiler GRUB tools
+GRUB_MKRESCUE = /opt/homebrew/Cellar/i686-elf-grub/2.12/bin/i686-elf-grub-mkrescue
 
 TARGET = kernelos.bin
 ISO = kernelos.iso
@@ -44,7 +47,7 @@ iso: $(TARGET)
 	@echo '    multiboot /boot/kernelos.bin' >> iso/boot/grub/grub.cfg
 	@echo '    boot' >> iso/boot/grub/grub.cfg
 	@echo '}' >> iso/boot/grub/grub.cfg
-	@grub-mkrescue -o $(ISO) iso 2>&1 | grep -v "^xorriso" || true
+	@$(GRUB_MKRESCUE) -o $(ISO) iso 2>&1 | grep -v "^xorriso" || true
 	@echo "ISO created: $(ISO)"
 
 run: iso

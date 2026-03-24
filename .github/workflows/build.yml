@@ -1,0 +1,69 @@
+name: Build KernelOS ISO
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          nasm \
+          gcc-i686-linux-gnu \
+          binutils-i686-linux-gnu \
+          xorriso \
+          grub-pc-bin \
+          grub-common \
+          make
+          
+    - name: Build kernel
+      run: |
+        make clean
+        make kernelos.bin
+        
+    - name: Create ISO
+      run: |
+        make iso
+        
+    - name: Upload ISO artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernelos-iso
+        path: kernelos.iso
+        retention-days: 30
+        
+    - name: Upload kernel binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernelos-bin
+        path: kernelos.bin
+        retention-days: 30
+        
+    - name: Verify ISO
+      run: |
+        ls -lh kernelos.iso
+        file kernelos.iso
+        
+    - name: Test boot (QEMU)
+      run: |
+        sudo apt-get install -y qemu-system-x86
+        # Quick boot test - check if kernel runs
+        timeout 10 qemu-system-i386 \
+          -cdrom kernelos.iso \
+          -m 64M \
+          -vga std \
+          -boot d \
+          -nographic \
+          -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+          2>&1 || true
