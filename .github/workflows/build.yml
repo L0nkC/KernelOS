@@ -17,11 +17,12 @@ jobs:
       
     - name: Install dependencies
       run: |
+        sudo dpkg --add-architecture i386
         sudo apt-get update
         sudo apt-get install -y \
           nasm \
-          gcc-i686-linux-gnu \
-          binutils-i686-linux-gnu \
+          gcc-multilib \
+          g++-multilib \
           xorriso \
           grub-pc-bin \
           grub-common \
@@ -32,9 +33,19 @@ jobs:
         make clean
         make kernelos.bin
         
+    - name: Verify kernel binary
+      run: |
+        file kernelos.bin
+        ls -la kernelos.bin
+        
     - name: Create ISO
       run: |
         make iso
+        
+    - name: Verify ISO
+      run: |
+        ls -lh kernelos.iso
+        file kernelos.iso
         
     - name: Upload ISO artifact
       uses: actions/upload-artifact@v4
@@ -49,21 +60,3 @@ jobs:
         name: kernelos-bin
         path: kernelos.bin
         retention-days: 30
-        
-    - name: Verify ISO
-      run: |
-        ls -lh kernelos.iso
-        file kernelos.iso
-        
-    - name: Test boot (QEMU)
-      run: |
-        sudo apt-get install -y qemu-system-x86
-        # Quick boot test - check if kernel runs
-        timeout 10 qemu-system-i386 \
-          -cdrom kernelos.iso \
-          -m 64M \
-          -vga std \
-          -boot d \
-          -nographic \
-          -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-          2>&1 || true

@@ -1,15 +1,26 @@
-# KernelOS Makefile - macOS compatible with i686-elf cross-compiler
+# KernelOS Makefile
+# Supports both macOS (with cross-compiler) and Linux
 
-CC = i686-elf-gcc
+# Detect OS
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+    # macOS with Homebrew cross-compiler
+    CC = i686-elf-gcc
+    LD = i686-elf-ld
+    GRUB_MKRESCUE = /opt/homebrew/Cellar/i686-elf-grub/2.12/bin/i686-elf-grub-mkrescue
+else
+    # Linux (GitHub Actions, etc.)
+    CC = gcc
+    LD = ld
+    GRUB_MKRESCUE = grub-mkrescue
+endif
+
 CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -nostdlib -nostartfiles \
          -fno-exceptions -fno-stack-protector -fno-pic -Ikernel -std=c99
 AS = nasm
 ASFLAGS = -f elf32
-LD = i686-elf-ld
 LDFLAGS = -m elf_i386 -T boot/linker.ld
-
-# Use cross-compiler GRUB tools
-GRUB_MKRESCUE = /opt/homebrew/Cellar/i686-elf-grub/2.12/bin/i686-elf-grub-mkrescue
 
 TARGET = kernelos.bin
 ISO = kernelos.iso
